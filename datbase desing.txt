@@ -1,0 +1,408 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+//////////////////////////////////////////////////////
+// ENUMS
+//////////////////////////////////////////////////////
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+//////////////////////////////////////////////////////
+// USERS
+//////////////////////////////////////////////////////
+
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  password    String?
+  firstName   String
+  lastName    String
+  phone       String
+  address     String?
+  city        String?
+  state       String?
+  pincode     String
+  role        Role     @default(USER)
+  isVerified  Boolean  @default(false)
+  googleId    String?  @unique
+
+  orders      Order[]
+  reviews     Review[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([role])
+}
+
+//////////////////////////////////////////////////////
+// PRODUCTS
+//////////////////////////////////////////////////////
+
+model Product {
+  id            String   @id @default(uuid())
+  name          String
+  slug          String   @unique
+  description   String?
+  price         Float
+  category      String
+  stock         Int
+  imageUrl      String
+  rating        Float    @default(0)
+  reviewCount   Int      @default(0)
+  isActive      Boolean  @default(true)
+
+  reviews       Review[]
+  orderItems    OrderItem[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([name])
+  @@index([category])
+  @@index([price])
+}
+
+//////////////////////////////////////////////////////
+// ORDERS
+//////////////////////////////////////////////////////
+
+model Order {
+  id              String        @id @default(uuid())
+  userId          String
+  user            User          @relation(fields: [userId], references: [id])
+
+  orderItems      OrderItem[]
+
+  totalPrice      Float
+  taxPrice        Float
+  shippingPrice   Float
+
+  paymentStatus   PaymentStatus @default(PENDING)
+  orderStatus     OrderStatus   @default(PENDING)
+
+  razorpayOrderId String?
+
+  shippingAddress Json
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+//////////////////////////////////////////////////////
+// ORDER ITEMS
+//////////////////////////////////////////////////////
+
+model OrderItem {
+  id         String   @id @default(uuid())
+  orderId    String
+  productId  String
+
+  order      Order    @relation(fields: [orderId], references: [id])
+  product    Product  @relation(fields: [productId], references: [id])
+
+  quantity   Int
+  price      Float
+
+  createdAt  DateTime @default(now())
+}
+
+//////////////////////////////////////////////////////
+// REVIEWS
+//////////////////////////////////////////////////////
+
+model Review {
+  id         String   @id @default(uuid())
+  userId     String
+  productId  String
+
+  user       User     @relation(fields: [userId], references: [id])
+  product    Product  @relation(fields: [productId], references: [id])
+
+  rating     Int
+  comment    String?
+
+  createdAt  DateTime @default(now())
+
+  @@index([productId])
+  @@index([userId])
+}
+
+//////////////////////////////////////////////////////
+// DELIVERY ZONES (PINCODE SYSTEM)
+//////////////////////////////////////////////////////
+
+model DeliveryZone {
+  pincode          String   @id
+  city             String
+  state            String
+  deliveryDays     Int
+  isServiceable    Boolean  @default(true)
+  shippingCharge   Float    @default(0)
+
+  createdAt        DateTime @default(now())
+}
+🔹 Final Notes (important)
+✅ Cart
+
+✔ LocalStorage (frontend) — perfect choice
+
+✅ Delivery system
+
+✔ DeliveryZone → fast + reliable
+✔ Later → Shiprocket integrate kar lena
+
+✅ Payment
+
+✔ Store only:
+
+razorpayOrderId
+👉 verification backend mein karna
+🔹 Optional future upgrades (baad mein)
+Coupons table
+Wishlist table
+Inventory logs
+Admin logs
+🔥 Final Verdict
+
+👉 Ye schema:
+
+Interview ready ✅
+Production ready ✅
+Scalable ✅
+Clean architecture ✅
+
+
+🚀 🔹 FINAL API STRUCTURE (UPDATED)
+🔐 Auth Routes
+POST   /api/auth/register
+POST   /api/auth/login
+POST   /api/auth/logout
+GET    /api/auth/profile
+PUT    /api/auth/profile
+DELETE /api/auth/profile
+POST   /api/auth/verify-email
+POST   /api/auth/refresh-token
+🛍️ Product Routes
+GET    /api/products
+GET    /api/products/:id
+POST   /api/products          (admin)
+PUT    /api/products/:id      (admin)
+DELETE /api/products/:id      (admin)
+
+👉 Supports:
+
+pagination
+filtering
+search
+⭐ Review Routes
+POST   /api/reviews
+GET    /api/reviews/:productId
+DELETE /api/reviews/:id
+📦 Order Routes
+POST   /api/orders
+GET    /api/orders            (user)
+GET    /api/orders/:id
+PUT    /api/orders/:id        (admin)
+GET    /api/orders/admin/all  (admin)
+💳 Payment Routes
+POST /api/payment/create-order
+POST /api/payment/verify
+POST /api/payment/webhook   🔥 (IMPORTANT)
+🚚 Delivery Routes
+GET /api/delivery/:pincode
+👤 User Admin Routes
+GET    /api/users
+GET    /api/users/:id
+PUT    /api/users/:id/role
+DELETE /api/users/:id
+📊 Analytics Routes
+GET /api/analytics/stats
+GET /api/analytics/monthly-sales
+📧 Email (Internal Service — no public route)
+
+👉 Use:
+
+Nodemailer
+sendOrderConfirmation(email, order)
+sendOrderStatusUpdate(email, order)
+🚀 🔹 UPDATED FULL SYSTEM FLOW (FINAL)
+🧑‍💻 1. Authentication Flow
+User → Login/Register (Next.js)
+      ↓
+POST /api/auth/login
+      ↓
+Backend:
+  - check password (bcrypt)
+  - generate JWT
+      ↓
+Return token
+      ↓
+Frontend stores token
+
+👉 Every request:
+
+Authorization: Bearer <JWT>
+🛍️ 2. Product Browsing
+GET /api/products
+      ↓
+Backend → DB (PostgreSQL via Prisma)
+      ↓
+Return products
+      ↓
+Cached by TanStack Query
+📦 3. Product + Pincode Check
+GET /api/products/:id
+      ↓
+User enters pincode
+      ↓
+GET /api/delivery/:pincode
+      ↓
+Backend:
+   - check DeliveryZone table
+   - (optional) call Shiprocket
+      ↓
+Return deliveryDays + shippingCharge
+🛒 4. Cart (Frontend Only)
+Add to cart → LocalStorage
+💳 5. Checkout Flow
+POST /api/payment/create-order
+      ↓
+Backend:
+   - calculate total
+   - create Razorpay order
+      ↓
+Return razorpayOrderId
+      ↓
+Frontend opens Razorpay UI
+✅ 6. Payment Verification (UPDATED 🔥)
+Option A (basic)
+POST /api/payment/verify
+      ↓
+Verify payment
+      ↓
+Create order
+✅ Option B (RECOMMENDED)
+
+👉 Razorpay webhook
+
+Razorpay → POST /api/payment/webhook
+      ↓
+Backend:
+   1. Verify signature
+   2. Create Order
+   3. Create OrderItems
+   4. Reduce stock
+   5. 🔥 Send Email
+📦 7. Order Creation (UPDATED)
+Create:
+- Order
+- OrderItems
+- Shipping Address
+- Payment Status
+📧 8. Email Notification (NEW 🔥)
+Order created
+      ↓
+Trigger Email Service
+      ↓
+User receives confirmation email
+
+👉 Better:
+
+Queue (async)
+🚚 9. Shipping Flow
+Order created
+      ↓
+(Optional) Send to Shiprocket
+      ↓
+Receive tracking ID
+      ↓
+Store in DB
+📊 10. Order Tracking
+GET /api/orders
+      ↓
+Return user orders
+⭐ 11. Review Flow
+POST /api/reviews
+      ↓
+Save review
+      ↓
+Update product rating
+👨‍💼 12. Admin Flow
+Manage Products
+Manage Orders
+Manage Users
+View Analytics
+📊 13. Analytics
+GET /api/analytics/stats
+GET /api/analytics/monthly-sales
+🔥 🔹 FINAL ARCHITECTURE
+[ Next.js Frontend ]
+        ↓
+[ TanStack Query ]
+        ↓
+[ NestJS Backend ]
+        ↓
+[ Prisma ORM ]
+        ↓
+[ PostgreSQL (Supabase) ]
+
+External Services:
+- Razorpay (payments)
+- Shiprocket (delivery)
+- Cloudinary (images)
+- Nodemailer (emails)
+🔐 🔹 Middleware Flow
+Request
+  ↓
+JWT Auth Guard
+  ↓
+Role Guard (Admin/User)
+  ↓
+Controller
+  ↓
+Service
+  ↓
+Database
+🧠 🔹 FINAL SUMMARY
+
+👉 Tumne ab include kar liya:
+✔ Auth
+✔ Products
+✔ Orders
+✔ Payment
+✔ Webhook
+✔ Delivery
+✔ Email
+✔ Admin
+✔ Analytics
+
+🔥 Ek line mein 
+
+👉 Ab tumhara system fully production-ready e-commerce architecture ban chuka hai 🚀
